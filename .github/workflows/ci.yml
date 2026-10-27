@@ -1,0 +1,31 @@
+name: Test and build
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '20 4 * * 1'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run check
+      - run: npm test
+      - run: docker build -t lti-test-harness:ci .
+      - name: Container smoke
+        run: |
+          docker run -d --name lti-harness-ci -p 127.0.0.1:8080:8080 -e HARNESS_TOKEN=ci-only-harness-token lti-test-harness:ci
+          for attempt in $(seq 1 30); do
+            if curl --fail http://127.0.0.1:8080/health; then exit 0; fi
+            sleep 1
+          done
+          docker logs lti-harness-ci
+          exit 1
+      - if: always()
+        run: docker rm -f lti-harness-ci || true

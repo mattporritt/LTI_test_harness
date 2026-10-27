@@ -1,0 +1,5 @@
+.env
+data/
+_smoke_test/artifacts/
+node_modules/
+coverage/

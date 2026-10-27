@@ -1,0 +1,7 @@
+.git
+.env
+data
+node_modules
+_smoke_test
+test
+docs

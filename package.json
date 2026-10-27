@@ -1,0 +1,10 @@
+{
+  "name": "lti-test-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone LTI tool for manual and automated platform regression testing",
+  "engines": {"node": ">=22"},
+  "scripts": {"start": "node src/server.js", "test": "node --test", "check": "node --check src/server.js && node --check src/protocol.js && node --check src/store.js"},
+  "license": "GPL-3.0-or-later"
+}
