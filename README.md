@@ -47,7 +47,7 @@ docker run --rm -p 127.0.0.1:8080:8080 \
 | Manual / automation | Accessible server-rendered forms plus authenticated JSON API |
 
 [API contract and examples](docs/api.md) · [Testing instructions](docs/testing.md) ·
-[Requirements and boundaries](docs/requirements.md) · [Validation record](docs/validation.md)
+[Requirements and boundaries](docs/requirements.md) · [Validation record](docs/validation.md) · [Real Moodle results](docs/moodle-validation.md)
 
 ## Develop
 
@@ -86,5 +86,64 @@ disable TLS verification. Never mount production credentials or Docker's socket.
 This release targets the workplan's basic and advanced harness milestones. It is
 **not 1EdTech certified** and does not implement LTI 2.0 registration, dynamic
 registration, legacy Content-Item selection, Tool Settings, full AGS CRUD, or Asset
-Processor. See [scope rationale](docs/requirements.md). Real Moodle, mobile app and
-other-vendor interoperability passes remain separate integration checks.
+Processor. See [scope rationale](docs/requirements.md). Real Moodle 6.0dev launches, gradebook updates and roster access were verified; see
+[real Moodle results](docs/moodle-validation.md) for passing flows and development-branch failures.
+Mobile app and other-vendor interoperability remain unverified.
+
+
+## Use the tool
+
+1. Register the tool URLs in the LMS and enable its grade and membership permissions.
+2. Register the LMS's exact issuer, client ID, deployment ID(s) and platform URLs in
+   the harness `/admin` page. Register a separate key/secret pair for LTI 1.1.
+3. As a teacher, add an external-tool activity. As a learner, launch it and inspect
+   the verified claims. Answer the quiz, then explicitly send a grade when desired.
+4. Use the service buttons to inspect line items, results and the roster, or use the
+   bearer-authenticated [JSON API](docs/api.md) to assert those values in automation.
+5. For content selection, enable Deep Linking on the LMS tool/placement, choose an
+   item and submit the signed return to the LMS. For submission review, use an AGS
+   line item declaring `submissionReview` and open its gradebook review launch.
+6. Preserve `/data` when restarting the container or upgrading Moodle. Reuse the
+   same launch ID to check that saved service URLs still work.
+
+The default content is a one-question quiz. Deep Linking can instead select a
+claims-only explorer. Quiz answers are local records; grade passback is a separate
+operation. Service responses always show success/failure and the exact requested
+URL; an HTTP 200 from the automation API alone is not proof of a successful LMS call.
+
+## Real Moodle / Docker setup
+
+[Step-by-step HTTPS, Docker network, field mapping and test guide](docs/moodle.md).
+The guide covers pre-core `mod_lti` and the development `core_ltix` endpoint layouts,
+placement activation, trusted development CAs, outbound ports, and FastCGI headers.
+It includes the exact isolated setup used against `https://webserver`.
+
+| Setting | Default / use |
+| --- | --- |
+| `PUBLIC_URL` | `http://localhost:8080`; externally visible tool origin, including port |
+| `HARNESS_TOKEN` | Required, 16+ characters; API bearer token and admin password |
+| `PORT` | `8080`; container HTTP listener |
+| `DATA_DIR` | `/data` in Docker; `./data` on host |
+| `NODE_EXTRA_CA_CERTS` | Optional path to public CA certificate for private HTTPS platforms |
+| `ALLOW_NUMERIC_RESOURCE_LINK_ID` | `false`; explicit compatibility for nonconforming numeric IDs |
+
+Strict LTI 1.3 validation is the default. The tested Moodle development branch emits
+numeric `resource_link.id` values; set `ALLOW_NUMERIC_RESOURCE_LINK_ID=true` only
+when intentionally testing that branch. The raw claim is retained and the capture
+and UI carry a protocol warning. This does not turn a platform defect into a
+conformance pass. Line-item creation also accepts explicit `resourceLinkId` or
+`null` for a standalone column, useful when diagnosing platform association bugs.
+
+After a browser launch, repeat the real service checks with:
+
+```sh
+HARNESS_URL=https://your-tool.example.test \
+HARNESS_TOKEN=your-test-token LAUNCH_ID=your-learner-launch-id \
+node _smoke_test/moodle-services.js
+```
+
+For private certificates, export `NODE_EXTRA_CA_CERTS` for this command too.
+The smoke script verifies roster membership, posts a score and asserts the returned
+result. Run it only on synthetic test learners: it intentionally changes grades.
+The optional `CREATE_STANDALONE=true` creates and scores a separate grade column;
+`LEGACY_LAUNCH_ID` additionally tests a chosen LTI 1.1 launch's Basic Outcomes return.

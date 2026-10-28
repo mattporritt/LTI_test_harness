@@ -284,3 +284,29 @@ test('created line item advertises review and selected content changes rendering
 test('primitive JWT payloads are rejected as invalid input', () => {
   assert.throws(() => jwtVerify(jwtSign(null, privateKey, 'platform-key'), platformJwks, { issuer, audience: 'client-1' }), /must be objects/);
 });
+
+
+test('numeric resource IDs require explicit compatibility and remain visible', async () => {
+  const data = await login(undefined, { [LTI + 'resource_link']: { id: 42 } });
+  const rejected = await post('/lti/launch', data);
+  assert.equal(rejected.status, 400); assert.match((await rejected.json()).error, /must be a non-empty string/);
+  await close(harness.server);
+  harness = createHarness({ baseUrl: base, token: secret, dataDir: temp, allowNumericResourceLinkId: true });
+  await new Promise(resolve => harness.server.listen(Number(new URL(base).port), '127.0.0.1', resolve));
+  const id = await launch(undefined, { [LTI + 'resource_link']: { id: 42 } });
+  const record = await (await api('/api/launches/' + id, undefined, 'GET')).json();
+  assert.equal(record.claims[LTI + 'resource_link'].id, 42);
+  assert.match(record.warnings[0], /numeric resource_link.id/);
+  assert.match(await (await fetch(base + '/session/' + id)).text(), /Protocol warnings/);
+});
+
+
+test('line-item creation supports explicit association and standalone items', async () => {
+  const id = await launch();
+  for (const resourceLinkId of [null, 'explicit-resource']) {
+    const result = await (await api(`/api/launches/${id}/actions`, { action: 'create-lineitem', resourceLinkId })).json();
+    assert.equal(result.success, true);
+    assert.equal(result.request.body.resourceLinkId, resourceLinkId === null ? undefined : resourceLinkId);
+  }
+  assert.equal((await api(`/api/launches/${id}/actions`, { action: 'create-lineitem', resourceLinkId: '' })).status, 400);
+});

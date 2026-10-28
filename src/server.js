@@ -35,6 +35,7 @@ export function createHarness(options = {}) {
   const d = store.data;
   const outbound = options.fetch || fetch;
   const launchURL = `${base}/lti/launch`;
+  const allowNumericResourceLinkId = options.allowNumericResourceLinkId ?? process.env.ALLOW_NUMERIC_RESOURCE_LINK_ID === 'true';
 
   // Private Docker networks and local HTTP are deliberately allowed for test platforms.
   // Every outbound origin must first be trusted by an authenticated operator.
@@ -101,7 +102,7 @@ export function createHarness(options = {}) {
       if (l.version === '1.3') controls += `<section><h2>Platform services</h2>${actionForm('lineitems', '', 'Read line items')}${actionForm('create-lineitem', field('label', 'New line item label', 'Harness grade'), 'Create line item')}${actionForm('members', '', 'Read roster')}${actionForm('results', '', 'Read results')}${actionForm('score', field('scoreGiven','Score (0–100)', '80','number'), 'Send score for launched user')}<p>Services require the relevant platform permissions. The exact advertised URL is used; redirects fail the request.</p></section>`;
       if (l.version === '1.1') controls += `<section><h2>Basic Outcomes</h2>${actionForm('outcome', field('scoreGiven','Score (0–100)', '80', 'number'), 'Send outcome grade')}</section>`;
     }
-    page(res, 'Launch inspector', `<p>Protocol ${e(l.version)} · ${e(l.messageType)}</p>${result ? `<section role="status"><h2>Action result</h2>${result}</section>` : ''}${controls}<details open><summary>Verified launch claims</summary>${pretty(l.claims)}</details><details><summary>Action history</summary>${pretty(l.actions)}</details><p class="muted">Session links grant access to this test launch. They expire when records are deleted or evicted by retention limits.</p>`);
+    page(res, 'Launch inspector', `<p>Protocol ${e(l.version)} · ${e(l.messageType)}</p>${l.warnings?.length ? `<section role="alert"><h2>Protocol warnings</h2>${pretty(l.warnings)}</section>` : ''}${result ? `<section role="status"><h2>Action result</h2>${result}</section>` : ''}${controls}<details open><summary>Verified launch claims</summary>${pretty(l.claims)}</details><details><summary>Action history</summary>${pretty(l.actions)}</details><p class="muted">Session links grant access to this test launch. They expire when records are deleted or evicted by retention limits.</p>`);
   }
   async function accessToken(p, scopes) {
     const assertion = jwtSign({ iss: p.clientId, sub: p.clientId, aud: p.tokenUrl, iat: now(), exp: now() + 60, jti: randomUUID() }, d.privateKey, d.kid);
@@ -159,7 +160,10 @@ export function createHarness(options = {}) {
     else if (action === 'create-lineitem') {
       url = ags.lineitems; scope = SCOPE.lineitem; method = 'POST'; contentType = 'application/vnd.ims.lis.v2.lineitem+json';
       payload = { scoreMaximum: 100, label: String(input.label || 'Harness grade').slice(0, 200), resourceId: 'harness-quiz', tag: 'harness', submissionReview: { url: launchURL, label: 'Review harness submission' } };
-      if (l.claims[LTI + 'resource_link']?.id) payload.resourceLinkId = l.claims[LTI + 'resource_link'].id;
+      if (Object.hasOwn(input, 'resourceLinkId')) {
+        insist(input.resourceLinkId === null || (typeof input.resourceLinkId === 'string' && input.resourceLinkId.length > 0), 'resourceLinkId must be a non-empty string or null');
+        if (input.resourceLinkId !== null) payload.resourceLinkId = input.resourceLinkId;
+      } else if (l.claims[LTI + 'resource_link']?.id) payload.resourceLinkId = l.claims[LTI + 'resource_link'].id;
     } else if (['score', 'results'].includes(action)) {
       // Use the stored/advertised URL verbatim, preserving legacy paths and query strings.
       const lineitem = input.lineitemUrl || l.lineitemUrl || ags.lineitem;
@@ -266,11 +270,16 @@ export function createHarness(options = {}) {
           insist(Array.isArray(claims[LTI + 'roles']) && claims[LTI + 'roles'].every(role => typeof role === 'string'), 'Missing or invalid roles');
           const messageType = claims[LTI + 'message_type'];
           insist(['LtiResourceLinkRequest', 'LtiDeepLinkingRequest', 'LtiSubmissionReviewRequest'].includes(messageType), 'Unsupported message type');
-          if (messageType === 'LtiResourceLinkRequest') insist(typeof claims[LTI + 'resource_link']?.id === 'string' && claims[LTI + 'resource_link'].id.length, 'Missing resource link');
+          const warnings = [];
+          if (messageType === 'LtiResourceLinkRequest') {
+            const resourceId = claims[LTI + 'resource_link']?.id;
+            if (allowNumericResourceLinkId && Number.isSafeInteger(resourceId)) warnings.push('Platform sent a numeric resource_link.id; LTI 1.3 requires a string. Compatibility option enabled; raw claim preserved.');
+            else insist(typeof resourceId === 'string' && resourceId.length, 'resource_link.id must be a non-empty string');
+          }
           if (messageType === 'LtiSubmissionReviewRequest') { insist(typeof claims[LTI + 'for_user']?.user_id === 'string' && claims[LTI + 'for_user'].user_id.length && claims[AGS + 'endpoint']?.lineitem, 'Missing submission review user or line item'); webURL(claims[AGS + 'endpoint'].lineitem); }
           if (messageType === 'LtiDeepLinkingRequest') { const settings = claims[DL + 'deep_linking_settings']; insist(settings && Array.isArray(settings.accept_types) && settings.deep_link_return_url, 'Missing Deep Linking settings'); webURL(settings.deep_link_return_url); }
           d.replays[`${p.id}:${claims.nonce}`] = Date.now() + 10 * 60 * 1000;
-          l = store.addLaunch({ version: '1.3', platformId: p.id, messageType, claims });
+          l = store.addLaunch({ version: '1.3', platformId: p.id, messageType, claims, warnings });
         } else {
           insist(!(req.headers['content-type'] || '').startsWith('application/json'), 'LTI 1.1 requires form encoding');
           const consumer = d.consumers.find(c => c.key === input.oauth_consumer_key); insist(consumer, 'Unknown consumer');

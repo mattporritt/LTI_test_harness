@@ -66,3 +66,95 @@ This release's own CI proves tool protocol behaviour against a synthetic platfor
 Moodle's opt-in PHPUnit/Behat tests, regression across the LTI migration slices,
 upgrade fixtures and app launch-path coverage must be connected and run in the
 Moodle repository. No mobile Web Services are added or changed by this tool.
+
+
+## Verified local setup: Moodle Docker and HTTPS
+
+The real validation used Moodle 6.0dev on `https://webserver`, network
+`moodlemaster_default`. Adapt container/network names to your actual checkout.
+The existing site was already installed; no reinstall or database reset was needed.
+The commands below create only two additional containers and a dedicated tool volume.
+
+1. Put `tool.crt` and `tool.key` for `lti-harness.127.0.0.1.nip.io` in the ignored
+   `_smoke_test/artifacts/moodle/` directory. Sign using your existing trusted local
+   development CA, or use a certificate from your normal development proxy. The
+   browser and Moodle container must trust that CA. Keep private keys uncommitted.
+2. Set `MOODLE_DEV_CA` to the absolute **public** CA certificate file on the host.
+   Replace the example token below with a random test token.
+3. Build and run:
+
+```sh
+docker build -t lti-test-harness:local .
+docker run -d --name lti-harness-moodle --network moodlemaster_default \
+  --read-only --cap-drop ALL --security-opt no-new-privileges \
+  -e PUBLIC_URL=https://lti-harness.127.0.0.1.nip.io:8444 \
+  -e HARNESS_TOKEN=replace-with-your-test-token \
+  -e NODE_EXTRA_CA_CERTS=/tls/ca.pem \
+  -v "$MOODLE_DEV_CA:/tls/ca.pem:ro" \
+  -v lti-harness-moodle-data:/data lti-test-harness:local
+
+docker run -d --name lti-harness-moodle-tls --network moodlemaster_default \
+  --network-alias lti-harness.127.0.0.1.nip.io -p 127.0.0.1:8444:8444 \
+  -v "$PWD/_smoke_test/nginx-moodle.conf:/etc/nginx/nginx.conf:ro" \
+  -v "$PWD/_smoke_test/artifacts/moodle:/tls:ro" nginx:alpine
+```
+
+The public loopback hostname resolves to the host in the browser and to the proxy
+through its Docker alias inside the Moodle network. This avoids host-file edits.
+DNS/network policy must permit the loopback hostname; another trusted development
+hostname with equivalent routing works too. Both parties use the same tool origin.
+The proxy sample includes a 32KB header buffer because real Moodle OIDC hints can
+exceed Nginx's default buffer and otherwise produce `upstream sent too big header`.
+After replacing the tool container, reload this dedicated proxy to refresh its DNS:
+`docker exec lti-harness-moodle-tls nginx -s reload`.
+
+4. In Moodle HTTP security settings, add **8444** to allowed cURL ports, preserving
+   existing entries. Verify `/health` using Moodle's own `curl` class before registration.
+5. If this is the tested `core_ltix` development branch, additionally pass
+   `-e ALLOW_NUMERIC_RESOURCE_LINK_ID=true` to the tool container. Stock consumers
+   emitting string resource IDs do not need this option.
+6. Register the tool and enable the activity placement. On this development branch,
+   set placement `default_usage=enabled` and its `deep_linking_url` to `/lti/launch`
+   at the tool's public origin. A selected but disabled placement cannot create links.
+7. Moodle's configuration details provide the client/deployment IDs. For the tested
+   branch, the issuer is `https://webserver` and endpoints are `/ltix/auth.php`,
+   `/ltix/token.php`, `/ltix/certs.php`. In pre-core Moodle they are commonly under
+   `/mod/lti/`; copy your site's displayed values rather than assuming either layout.
+8. Enable AGS **grade sync and column management**, NRPS, and grade acceptance.
+   For the tested development branch, these correspond to
+   `ltixservice_gradesynchronization=2` and `ltixservice_memberships=1`.
+
+### Apache / PHP-FPM authentication
+
+The tested HTTP/2 development container had no Authorization-header forwarding to
+PHP-FPM. Token requests succeeded but every service request returned 401. The
+minimal environment correction was this Apache configuration, followed by
+`apachectl graceful` inside that test container:
+
+```apache
+SetEnvIfNoCase Authorization "(.+)" HTTP_AUTHORIZATION=$1
+```
+
+Only add this if your deployment drops the header. It is an environment setting,
+not a Moodle or harness source patch. Existing Docker-mounted Apache configuration
+should carry the equivalent directive if it must survive container recreation.
+Never work around this by disabling token validation.
+
+### Optional core_ltix development fixtures
+
+`_smoke_test/moodle-fixture.php` targets the tested **core_ltix development branch**.
+It requires an already registered tool named `Harness real Moodle 1.3`. Copy it to
+`/tmp` in the Moodle container, set `HARNESS_FIXTURE_PASSWORD` and
+`HARNESS_LEGACY_SECRET`, and invoke it with the explicit root `config.php` path.
+It creates/reuses only its named course, two synthetic users, legacy tool and two
+activities; it enables the dedicated activity placements and Deep Linking URL.
+It reports client/deployment IDs and platform endpoints. It does not install Moodle,
+change existing users' passwords, or delete fixture data. Check its fixed names
+before running on any shared test site. Use the normal Moodle UI on stock releases.
+
+## Current development-branch findings
+
+See [real Moodle validation](moodle-validation.md). Real grades and roster access
+pass after environment setup. This particular branch has independent Deep Linking,
+submission-review, resource-association and legacy-URL failures. Do not claim those
+flows pass merely because the synthetic platform suite passes.

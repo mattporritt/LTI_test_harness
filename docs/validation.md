@@ -1,5 +1,7 @@
 # Validation and handoff
 
+This is the initial synthetic-platform validation record. See [real Moodle validation](moodle-validation.md) for the subsequent real-site run and current test counts.
+
 28 October 2026. Branch `feat/standalone-lti-harness`, based on `fbd2d88`.
 Implementation is standalone: no Moodle source, database or shared Docker stack
 was changed. No Jira key applies; no Jira or Confluence writes were made. The

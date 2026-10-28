@@ -63,7 +63,7 @@ curl --fail-with-body "$TOOL_URL/api/launches/$LAUNCH_ID/actions" \
 | `answer` | `answer` | Store local quiz result; no grade passback |
 | `deep-link` | `content`: `echo` or `quiz`, optional `title` | Return `{url, JWT, claims}` for form POST to the platform |
 | `lineitems` | Optional `pageUrl` | GET advertised AGS collection |
-| `create-lineitem` | Optional `label` | POST 100-point line item with review support, save returned `id` |
+| `create-lineitem` | Optional `label`, `resourceLinkId` (string or `null`) | POST 100-point line item with review support, save returned `id` |
 | `score` | `scoreGiven` 0–100, optional `lineitemUrl` | POST a completed/fully graded score for the launching subject |
 | `results` | Optional `lineitemUrl`, `pageUrl` | GET AGS results |
 | `members` | Optional `pageUrl` | GET NRPS membership container |
@@ -105,3 +105,11 @@ This tool makes T-HAR/T-PATH possible; passing its synthetic regression test alo
 is not evidence that a particular Moodle migration preserves stored endpoints.
 
 Anonymous launches (no `sub`, possibly empty roles) are accepted. Sending an AGS score requires a launching subject.
+
+For `create-lineitem`, omitting `resourceLinkId` uses the received resource ID unchanged.
+Pass a non-empty string to test an explicit association, or `null` to create a
+standalone column. The chosen value is visible in the request transcript.
+
+`ALLOW_NUMERIC_RESOURCE_LINK_ID=true` is an explicit runtime compatibility option:
+strict mode otherwise rejects numeric LTI 1.3 resource IDs. Accepted compatibility
+launches include `warnings`; tests should assert these as protocol deviations.

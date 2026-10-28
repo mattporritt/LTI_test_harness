@@ -66,4 +66,4 @@ embedded and in a new window. Test Deep Linking, AGS/NRPS enabled/disabled, Basi
 Outcomes, submission review, stored URLs after upgrade, backup/restore/course copy,
 and the Moodle mobile app launch path. Confirm actual gradebook updates, not just
 HTTP responses. Record the exact Moodle version and deployment configuration.
-This repository does not yet record a completed real-Moodle or mobile pass.
+A real Moodle 6.0dev pass is recorded in [Moodle validation](moodle-validation.md), with successful grade/roster checks and specific development-branch failures. Mobile remains unverified.
