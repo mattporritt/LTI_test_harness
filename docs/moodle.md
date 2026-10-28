@@ -45,6 +45,16 @@ the tool. Its Compose file starts only the harness and its dedicated volume.
    If the installed platform supports the extension, open review from the grade report. Check `for_user` and the local answer history. The harness does not add a
    Moodle-specific review button and does not add a vendor-specific review workflow.
 
+## Main versus the LTI development branch
+
+The [current-main browser validation](moodle-main-validation.md) records a fresh
+Moodle install with working Deep Linking and teacher submission review. Its helper,
+`_smoke_test/moodle-main-fixture.php`, uses main's `mod_lti` APIs and leaves generated
+activity consumer credentials empty so configured tool credentials are used.
+The original `moodle-fixture.php` targets the separate `core_ltix` development
+branch and its placement APIs; do not use that helper on upstream main.
+Moodle's allowed outbound-port setting uses one port per line.
+
 ## LTI 1.1
 
 Register a key/shared-secret pair on the harness `/admin` page. In Moodle create an

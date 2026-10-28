@@ -47,7 +47,7 @@ docker run --rm -p 127.0.0.1:8080:8080 \
 | Manual / automation | Accessible server-rendered forms plus authenticated JSON API |
 
 [API contract and examples](docs/api.md) · [Testing instructions](docs/testing.md) ·
-[Requirements and boundaries](docs/requirements.md) · [Validation record](docs/validation.md) · [Real Moodle results](docs/moodle-validation.md)
+[Requirements and boundaries](docs/requirements.md) · [Validation record](docs/validation.md) · [Current-main browser results](docs/moodle-main-validation.md) · [Development-baseline results](docs/moodle-validation.md)
 
 ## Develop
 
@@ -86,8 +86,9 @@ disable TLS verification. Never mount production credentials or Docker's socket.
 This release targets the workplan's basic and advanced harness milestones. It is
 **not 1EdTech certified** and does not implement LTI 2.0 registration, dynamic
 registration, legacy Content-Item selection, Tool Settings, full AGS CRUD, or Asset
-Processor. See [scope rationale](docs/requirements.md). Real Moodle 6.0dev launches, gradebook updates and roster access were verified; see
-[real Moodle results](docs/moodle-validation.md) for passing flows and development-branch failures.
+Processor. See [scope rationale](docs/requirements.md). Real Moodle main browser workflows include Deep Linking, learner interaction, gradebook updates and teacher submission review; see
+[current-main browser results](docs/moodle-main-validation.md). MDL-89973 still reproduces.
+[Development-baseline results](docs/moodle-validation.md) retain the separate core_ltix branch failures.
 Mobile app and other-vendor interoperability remain unverified.
 
 
