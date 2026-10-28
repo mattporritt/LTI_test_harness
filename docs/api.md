@@ -17,7 +17,20 @@ JWKS endpoint are unauthenticated.
 | POST | `/api/launches/{id}/actions` | Execute an action |
 | DELETE | `/api/launches` | Clear launches, preserving keys and registrations |
 
-## Register
+## Dynamic registration
+
+`POST /api/registration-links` accepts `{ "name": "Tool name", "origins": ["https://lms.example.test"] }`
+and returns a one-use `{url, expiresAt}` (201). It requires management authentication.
+Use that URL in the platform registration UI; see the [complete protocol and
+automation guide](dynamic-registration.md). `/registration` is still manual-endpoint
+JSON, not the dynamic initiation URL.
+
+`POST /api/platforms/{id}/deployments` accepts `{ "deploymentIds": ["actual-id"] }`
+and returns the saved platform (200). It requires management authentication and
+replaces its deployment list. Use it when a dynamic response omitted deployment_id.
+The returned platform has `dynamicRegistration.deploymentPending` until completed.
+
+## Register (manual)
 
 ```sh
 export TOOL_URL=http://localhost:8080

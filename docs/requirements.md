@@ -39,7 +39,8 @@ this release: the workplan's wider regression matrix includes it, but its extern
 basic-tool milestone explicitly names 1.1 and 1.3. Existing characterisation tests
 and vendor regression tools remain necessary for the 2.0 migration guardrail.
 
-Manual registration is supported, not OIDC dynamic registration. Deep Linking
+Manual and platform-initiated LTI dynamic registration of new clients are supported.
+Registration updates are excluded. Deep Linking
 supports one `ltiResourceLink`, not every accepted content type or bulk selection.
 Basic Outcomes is supported, not legacy Content-Item selection. Tool Settings and
 AGS line-item update/delete are future extensions. Asset Processor remains later
@@ -52,6 +53,8 @@ publishing an image to a chosen registry, partner tools and mobile-app validatio
 are integration/deployment work, not performed by this repository's test suite.
 
 ## Standards used
+
+- [LTI Dynamic Registration 1.0](https://www.imsglobal.org/spec/lti-dr/v1p0)
 
 - [LTI Core 1.3](https://www.imsglobal.org/spec/lti/v1p3/)
 - [LTI security framework](https://www.imsglobal.org/spec/security/v1p0/)

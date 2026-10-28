@@ -119,12 +119,37 @@ forms, with no certificate error. Keep this page and Moodle open in separate tab
 
 ## 2. Register the tool in Moodle (LTI 1.3)
 
+Choose **dynamic registration** for automatic exchange of client IDs and endpoints,
+or follow the manual field mapping below.
+
+### Dynamic registration (recommended for Moodle)
+
+1. Open `PUBLIC_URL/admin`. Under **Dynamic registration**, enter your Moodle origin
+   in **Trusted platform origins**, e.g. `https://webserver`, and a tool name.
+2. Click **Create registration link** and copy the one-use URL (valid ten minutes).
+3. In Moodle **Manage tools**, paste it into **Tool URL** and click **Add LTI Advantage**.
+   If prompted about existing tools, choose **Register as a new external tool**.
+4. In the harness confirmation screen, check the discovery URL and click **Register tool**.
+5. Expect **Dynamic registration complete** and a saved client/deployment. Click
+   **Return to platform**, then **Activate** the Pending tool in Moodle.
+6. Skip section 3: Moodle is already registered in the harness. Continue at
+   [creating an activity](#4-create-and-launch-a-test-activity).
+
+The [dynamic registration guide](docs/dynamic-registration.md) and
+[real Moodle validation](docs/dynamic-registration-validation.md) cover API automation,
+missing deployment IDs, trusted origins, failures and limitations. If a platform
+returns no deployment ID, fill the **Deployment required** form in harness admin
+before launching. Client updates/re-registration are not implemented.
+
+### Manual registration
+
+
 As a Moodle administrator:
 
 1. Open **Site administration → Plugins → Activity modules → External tool → Manage tools**.
    On upstream Moodle, the direct path is `/mod/lti/toolconfigure.php`.
-2. Click **configure a tool manually**. The harness does not implement automatic
-   registration: do not use **Add LTI Advantage** with its URL.
+2. Click **configure a tool manually**. Use this route for manual registration; **Add LTI Advantage** instead needs the
+   one-use URL from the dynamic flow above.
 3. Complete the fields below, replacing `TOOL_ORIGIN` with your `PUBLIC_URL`.
 
 | Moodle field | Value |
@@ -159,7 +184,7 @@ development branch also requires an enabled activity placement and its Deep Link
 URL; see [branch-specific setup](docs/moodle.md). Upstream main does not use those
 placement APIs. Copy the endpoints your actual site displays.
 
-## 3. Register Moodle in the harness
+## 3. Register Moodle in the harness (manual route only)
 
 In `$PUBLIC_URL/admin`, under **Register an LTI 1.3 platform**, enter:
 
@@ -311,6 +336,7 @@ It exits 1 when the Moodle regressions are present; that is a detected LMS failu
 | Feature | Coverage |
 | --- | --- |
 | LTI 1.1 | HMAC-SHA1 launches and signed Basic Outcomes grade return |
+| Dynamic registration | New LTI 1.3 clients, discovered endpoints, automatic deployment storage, scoped one-use links |
 | LTI 1.3 | OIDC, RS256 verification, issuer/client/deployment/target checks, one-use state/nonce |
 | Deep Linking 2.0 | Single-resource signed response, preserved data and grade line item |
 | AGS 2.0 / NRPS 2.0 | Read/create line items, send scores/read results, read memberships; pagination via API |
@@ -323,7 +349,7 @@ interaction, grades, rosters and separate teacher review; see
 The separate [development-baseline results](docs/moodle-validation.md) retain its
 core_ltix failures. MDL-89973 remains reproducible on main. Fresh-install results do
 not prove stored-URL migration, backup/restore, course copy or mobile interoperability.
-The tool is not 1EdTech certified. LTI 2.0, dynamic registration, legacy Content-Item
+The tool is not 1EdTech certified. LTI 2.0, registration updates, legacy Content-Item
 selection, Tool Settings, full AGS CRUD and Asset Processor are not implemented.
 
 ## Configuration, persistence and development

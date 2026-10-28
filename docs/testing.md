@@ -75,3 +75,10 @@ normal wrapper and instance selection. The [MDL-89973 runner](MDL-89973.md) asse
 actual grades, completion, grade preservation, clearing and stale-update rejection.
 It intentionally exits 1 against the unpatched branch; the harness unit suite must
 still pass. Run only against dedicated synthetic test activities.
+
+## Dynamic registration
+
+Follow the [dynamic registration browser sequence](dynamic-registration.md#moodle-browser-setup),
+including Pending → Activate and a learner launch/grade. `npm test` also exercises
+an independent discovery/registration server followed by a signed LTI launch, plus
+rejection, token handling, replay and pending-deployment cases.

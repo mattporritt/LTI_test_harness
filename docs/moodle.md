@@ -23,6 +23,13 @@ inside the harness; mount a public CA and set `NODE_EXTRA_CA_CERTS` if needed.
 Do not turn off TLS verification or restart/reconfigure a shared LMS stack to test
 the tool. Its Compose file starts only the harness and its dedicated volume.
 
+## LTI 1.3 dynamic registration
+
+Use the [dynamic registration guide](dynamic-registration.md) to create a one-use
+link in harness admin, start Moodle’s **Add LTI Advantage** flow, confirm the
+exchange, return to Moodle and activate the Pending tool. The client, deployment
+and platform endpoints are saved automatically. Manual setup remains below.
+
 ## LTI 1.3 manual registration
 
 1. Start the harness. Open its `/admin` page and copy its tool URLs.

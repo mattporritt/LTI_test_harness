@@ -2,6 +2,7 @@ import http from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { Store } from './store.js';
+import { dynamicRegistration } from './registration.js';
 import { scorePayload, ACTIVITY_PROGRESS, GRADING_PROGRESS } from './score.js';
 import { LTI, DL, AGS, NRPS, SCOPE, insist, equal, webURL, jwtSign, jwtParts, jwtVerify, oauthSignature, oauthHeader, publicJwk, formPost, escapeHTML as e } from './protocol.js';
 
@@ -68,24 +69,26 @@ export function createHarness(options = {}) {
     insist(!req.headers.origin || req.headers.origin === base, 'Cross-origin management request refused', 403);
     insist(!['cross-site'].includes(req.headers['sec-fetch-site']), 'Cross-site management request refused', 403);
   }
-  function platformData(input) {
+  function platformData(input, allowPendingDeployment = false) {
     for (const key of ['name', 'issuer', 'clientId', 'authUrl', 'tokenUrl', 'jwksUrl']) insist(typeof input[key] === 'string' && input[key].length, `Missing ${key}`);
     webURL(input.issuer);
     const deploymentIds = Array.isArray(input.deploymentIds) ? input.deploymentIds : String(input.deploymentIds || '').split(',').map(s => s.trim()).filter(Boolean);
-    insist(deploymentIds.length && deploymentIds.every(s => typeof s === 'string' && s.length), 'At least one deployment ID is required');
+    insist((deploymentIds.length || allowPendingDeployment) && deploymentIds.every(s => typeof s === 'string' && s.length), 'At least one deployment ID is required');
     const extra = Array.isArray(input.serviceOrigins) ? input.serviceOrigins : String(input.serviceOrigins || '').split(',').map(s => s.trim()).filter(Boolean);
     const origins = [...new Set([input.issuer, input.authUrl, input.tokenUrl, input.jwksUrl, ...extra].map(s => webURL(s).origin))];
     insist(!d.platforms.some(p => p.issuer === input.issuer && p.clientId === input.clientId), 'Issuer/client already registered', 409);
     return { id: randomUUID(), name: input.name, issuer: input.issuer, clientId: input.clientId, authUrl: input.authUrl, tokenUrl: input.tokenUrl, jwksUrl: input.jwksUrl, deploymentIds, origins };
   }
+  const dynamic = dynamicRegistration({ base, request, platformData, platforms: d.platforms, save: () => store.save() });
   function registration() {
-    return { name: 'LTI test harness', initiate_login_uri: `${base}/lti/login`, redirect_uris: [launchURL], jwks_uri: `${base}/.well-known/jwks.json`, target_link_uri: launchURL, deep_linking_uri: launchURL, messages: ['LtiResourceLinkRequest', 'LtiDeepLinkingRequest', 'LtiSubmissionReviewRequest'], api: `${base}/api`, supported: ['LTI 1.1 basic launch and Basic Outcomes', 'LTI 1.3', 'Deep Linking 2.0', 'AGS 2.0', 'NRPS 2.0', 'Submission Review 1.0'] };
+    return { name: 'LTI test harness', dynamic_registration_links: `${base}/api/registration-links`, initiate_login_uri: `${base}/lti/login`, redirect_uris: [launchURL], jwks_uri: `${base}/.well-known/jwks.json`, target_link_uri: launchURL, deep_linking_uri: launchURL, messages: ['LtiResourceLinkRequest', 'LtiDeepLinkingRequest', 'LtiSubmissionReviewRequest'], api: `${base}/api`, supported: ['LTI 1.1 basic launch and Basic Outcomes', 'LTI 1.3', 'Deep Linking 2.0', 'AGS 2.0', 'NRPS 2.0', 'Submission Review 1.0'] };
   }
   function adminPage(res) {
     page(res, 'Tool administration', `<p>Register a platform, then copy these tool endpoints into its external-tool configuration. Use this service only with test accounts.</p><section><h2>Tool endpoints</h2>${pretty(registration())}</section>
+    <section><h2>Dynamic registration</h2><p>Create a one-use link, paste it into Moodle’s Add LTI Advantage field, then confirm registration. Links expire after 10 minutes.</p><form method="post" action="/admin/registration-links">${field('origins','Trusted platform origins (comma separated)','','text')}${field('name','Tool name','LTI test harness')}<button>Create registration link</button></form></section>
     <section><h2>Register an LTI 1.3 platform</h2><form method="post" action="/admin/platforms">${field('name','Display name')}${field('issuer','Issuer (exact platform value)', '', 'url')}${field('clientId','Client ID')}${field('deploymentIds','Deployment IDs (comma separated)')}${field('authUrl','Authentication URL', '', 'url')}${field('tokenUrl','Access token URL', '', 'url')}${field('jwksUrl','Public keyset URL', '', 'url')}<label>Additional trusted service origins (comma separated)<input name="serviceOrigins" placeholder="https://services.example.org"></label><button>Register platform</button></form></section>
     <section><h2>Register an LTI 1.1 consumer</h2><form method="post" action="/admin/consumers">${field('name','Consumer display name')}${field('key','Consumer key')}${field('secret','Shared secret', '', 'password')}<label>Trusted outcome service origins (comma separated)<input name="serviceOrigins" placeholder="https://lms.example.org"></label><button>Register consumer</button></form></section>
-    <section><h2>Registrations</h2>${pretty(d.platforms)}${pretty(d.consumers.map(({ secret, ...p }) => p))}</section>
+    <section><h2>Registrations</h2>${pretty(d.platforms)}${d.platforms.filter(p => !p.deploymentIds.length).map(p => `<form method="post" action="/admin/platforms/${e(p.id)}/deployments"><p>Deployment required for ${e(p.name)} (${e(p.clientId)})</p>${field('deploymentIds','Deployment IDs (comma separated)')}<button>Save deployment IDs</button></form>`).join('')}${pretty(d.consumers.map(({ secret, ...p }) => p))}</section>
     <section><h2>Recorded launches</h2><ul>${[...d.launches].reverse().map(l => `<li><a href="/session/${e(l.id)}">${e(l.createdAt)} · ${e(l.version)} · ${e(l.messageType)}</a></li>`).join('') || '<li>No launches yet</li>'}</ul></section>`);
   }
   function sessionPage(res, l, result = '') {
@@ -195,9 +198,26 @@ export function createHarness(options = {}) {
   }
   const server = http.createServer(async (req, res) => {
     res.setHeader('Cache-Control', 'no-store'); res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Referrer-Policy', 'same-origin');
-    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; form-action http: https:; frame-ancestors http: https:; base-uri 'none'");
+    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; form-action http: https:; frame-ancestors http: https:; base-uri 'none'");
     try {
       const url = new URL(req.url, base); const path = url.pathname;
+      if (req.method === 'GET' && path === '/registration-close.js') {
+        res.writeHead(200, { 'Content-Type': 'text/javascript' });
+        return res.end("document.getElementById('registration-close')?.addEventListener('click', () => { (window.opener || window.parent).postMessage({subject:'org.imsglobal.lti.close'}, '*'); });");
+      }
+      const registrationPath = path.match(/^\/lti\/register\/([^/]+)$/);
+      if (registrationPath) {
+        const id = registrationPath[1];
+        if (req.method === 'GET') {
+          const info = dynamic.initiate(id, url.searchParams);
+          return page(res, 'Confirm dynamic registration', `<section><p>Register <strong>${e(info.name)}</strong> with ${e(info.discovery)}?</p><p>Approved origins: ${e(info.origins.join(', '))}. This creates a client in the selected test LMS and saves its platform details here. Activate it separately in Moodle.</p><details><summary>Requested tool configuration</summary>${pretty(info.metadata)}</details><form method="post" action="/lti/register/${e(id)}"><button>Register tool</button></form></section>`);
+        }
+        if (req.method === 'POST') {
+          checkOrigin(req);
+          const result = await dynamic.complete(id);
+          return page(res, 'Dynamic registration complete', `<section role="status"><p>Client ${e(result.platform.clientId)} saved. ${result.platform.deploymentIds.length ? 'Deployment saved.' : 'Deployment ID not supplied: add it through harness administration before launching.'} Review and activate the tool in Moodle.</p><button id="registration-close">Return to platform</button><script src="/registration-close.js"></script></section>${pretty(result.platform)}`);
+        }
+      }
       if (req.method === 'GET' && path === '/health') return json(res, 200, { status: 'ok', version: '0.1.0' });
       if (req.method === 'GET' && path === '/.well-known/jwks.json') return json(res, 200, { keys: [publicJwk(d.privateKey, d.kid)] });
       if (req.method === 'GET' && path === '/registration') return json(res, 200, registration());
@@ -205,6 +225,25 @@ export function createHarness(options = {}) {
       if (path.startsWith('/api') || path.startsWith('/admin')) {
         authorize(req, res); if (req.method !== 'GET') checkOrigin(req);
         if (req.method === 'GET' && path === '/admin') return adminPage(res);
+        if (req.method === 'POST' && ['/api/registration-links', '/admin/registration-links'].includes(path)) {
+          const input = await body(req);
+          if (typeof input.origins === 'string') input.origins = input.origins.split(',').map(s => s.trim()).filter(Boolean);
+          const link = dynamic.issue(input);
+          if (path.startsWith('/api')) return json(res, 201, link);
+          return page(res, 'Registration link ready', `<section role="status"><p>Copy this URL into Moodle’s Tool URL field and click Add LTI Advantage. It expires at ${e(link.expiresAt)} and can be used once.</p><p><code>${e(link.url)}</code></p><a href="/admin">Back to administration</a></section>`);
+        }
+        const deploymentPath = path.match(/^\/(api|admin)\/platforms\/([^/]+)\/deployments$/);
+        if (req.method === 'POST' && deploymentPath) {
+          const p = d.platforms.find(p => p.id === deploymentPath[2]); insist(p, 'Platform not found', 404);
+          const input = await body(req);
+          const ids = Array.isArray(input.deploymentIds) ? input.deploymentIds : String(input.deploymentIds || '').split(',').map(s => s.trim()).filter(Boolean);
+          insist(ids.length > 0 && ids.every(id => typeof id === 'string' && id.length > 0), 'At least one deployment ID is required');
+          p.deploymentIds = [...new Set(ids)];
+          if (p.dynamicRegistration) p.dynamicRegistration.deploymentPending = false;
+          store.save();
+          if (deploymentPath[1] === 'api') return json(res, 200, p);
+          res.writeHead(303, { Location: '/admin' }); return res.end();
+        }
         if (req.method === 'GET' && path === '/api/platforms') return json(res, 200, d.platforms);
         if (req.method === 'GET' && path === '/api/consumers') return json(res, 200, d.consumers.map(({ secret, ...c }) => c));
         if (req.method === 'GET' && path === '/api/launches') return json(res, 200, d.launches);
@@ -309,7 +348,8 @@ export function createHarness(options = {}) {
       const message = status === 500 ? 'Internal harness error' : err.message;
       if (status === 500) console.error(err);
       if ((req.headers.accept || '').includes('application/json') || req.url.startsWith('/api')) return json(res, status, { error: message });
-      page(res, 'Request failed', `<section class="error" role="alert"><p>${e(message)}</p><p><a href="/">Harness home</a></p></section>`, status);
+      const closeRegistration = req.url.startsWith('/lti/register/') ? '<button id="registration-close">Return to platform</button><script src="/registration-close.js"></script>' : '';
+      page(res, 'Request failed', `<section class="error" role="alert"><p>${e(message)}</p>${closeRegistration}<p><a href="/">Harness home</a></p></section>`, status);
     }
   });
   server.requestTimeout = 15000; server.headersTimeout = 10000;

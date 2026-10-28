@@ -5,6 +5,6 @@
   "type": "module",
   "description": "Standalone LTI tool for manual and automated platform regression testing",
   "engines": {"node": ">=22"},
-  "scripts": {"start": "node src/server.js", "test": "node --test", "check": "node --check src/server.js && node --check src/protocol.js && node --check src/store.js && node --check src/score.js && node --check src/scenarios/partial-scores.js && node --check _smoke_test/ags-partial-scores.js"},
+  "scripts": {"start": "node src/server.js", "test": "node --test", "check": "node --check src/registration.js && node --check src/server.js && node --check src/protocol.js && node --check src/store.js && node --check src/score.js && node --check src/scenarios/partial-scores.js && node --check _smoke_test/ags-partial-scores.js"},
   "license": "GPL-3.0-or-later"
 }
