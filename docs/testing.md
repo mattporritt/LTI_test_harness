@@ -40,7 +40,7 @@ on the first run; the registration is immutable and subsequent runs reuse it.
 4. Enter 4 and click **Check answer**; expect `correct:true, score:100`. Enter 3;
    expect a local incorrect result. No platform grade is sent by this action.
 5. Send a score of 80; expect a scoped request to the exact `services.php/.../scores`
-   path and `success:true`, HTTP 204. Try 101; expect a visible 400 error.
+   path and `success:true`, HTTP 204. Try a negative score; expect a visible 400 error. Scores above the maximum are valid AGS extra credit.
 6. Open the launch's original `/session/{id}` URL again. Read roster, line items and
    results; create a line item. Expect captures with methods, exact URLs and status.
 7. Choose **LtiDeepLinkingRequest** on the platform page, complete the launch, select
@@ -67,3 +67,11 @@ Outcomes, submission review, stored URLs after upgrade, backup/restore/course co
 and the Moodle mobile app launch path. Confirm actual gradebook updates, not just
 HTTP responses. Record the exact Moodle version and deployment configuration.
 A real Moodle 6.0dev pass is recorded in [Moodle validation](moodle-validation.md), with successful grade/roster checks and specific development-branch failures. Mobile remains unverified.
+
+## moodle-docker and provisional scores
+
+Use the [optional service fragment](../integrations/moodle-docker/README.md) with the
+normal wrapper and instance selection. The [MDL-89973 runner](MDL-89973.md) asserts
+actual grades, completion, grade preservation, clearing and stale-update rejection.
+It intentionally exits 1 against the unpatched branch; the harness unit suite must
+still pass. Run only against dedicated synthetic test activities.

@@ -64,7 +64,7 @@ curl --fail-with-body "$TOOL_URL/api/launches/$LAUNCH_ID/actions" \
 | `deep-link` | `content`: `echo` or `quiz`, optional `title` | Return `{url, JWT, claims}` for form POST to the platform |
 | `lineitems` | Optional `pageUrl` | GET advertised AGS collection |
 | `create-lineitem` | Optional `label`, `resourceLinkId` (string or `null`) | POST 100-point line item with review support, save returned `id` |
-| `score` | `scoreGiven` 0–100, optional `lineitemUrl` | POST a completed/fully graded score for the launching subject |
+| `score` | `scoreGiven` >=0, optional `scoreMaximum`, progress states, timestamp, `lineitemUrl` | POST an AGS score/status update for the launching subject |
 | `results` | Optional `lineitemUrl`, `pageUrl` | GET AGS results |
 | `members` | Optional `pageUrl` | GET NRPS membership container |
 | `outcome` | `scoreGiven` 0–100 | LTI 1.1 Basic Outcomes `replaceResult`, normalized to 0–1 |
@@ -113,3 +113,22 @@ standalone column. The chosen value is visible in the request transcript.
 `ALLOW_NUMERIC_RESOURCE_LINK_ID=true` is an explicit runtime compatibility option:
 strict mode otherwise rejects numeric LTI 1.3 resource IDs. Accepted compatibility
 launches include `warnings`; tests should assert these as protocol deviations.
+
+
+## AGS status, clearing and ordering tests
+
+The score action supports `activityProgress` (`Initialized`, `Started`, `InProgress`,
+`Submitted`, `Completed`) and `gradingProgress` (`FullyGraded`, `Pending`,
+`PendingManual`, `Failed`, `NotReady`). Defaults remain Completed/FullyGraded.
+`scoreMaximum` defaults to 100 and must be positive. Scores may exceed the maximum
+(extra credit); Basic Outcomes retains its separate 0–100 input range.
+
+`scoreGiven:null` or `scoreMode:"null"` sends JSON null.
+`scoreMode:omit` sends no scoreGiven member. Both are deliberate clearing operations.
+Omitting scoreGiven without an explicit mode remains an input error. A supplied
+`timestamp` must be ISO 8601 with fractional seconds and a timezone; it is preserved
+verbatim, including deliberately older timestamps. The tool never turns Pending
+into FullyGraded or generates a fresh time over an explicit caller timestamp.
+
+See [MDL-89973 reproduction and expected states](MDL-89973.md). Assert actual LMS
+grade and completion as well as the HTTP/service transcript.

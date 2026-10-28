@@ -1,0 +1,21 @@
+# Add after moodle-docker's base fragments via its wrapper's -f option, or merge into local.yml.
+services:
+  webserver:
+    environment:
+      MOODLE_DOCKER_LTI_HARNESS: "true"
+      TEST_LTI_TOOL_URL: ${MOODLE_DOCKER_LTI_HARNESS_API_URL:-http://ltimock:8080}
+      TEST_LTI_TOOL_TOKEN: ${MOODLE_DOCKER_LTI_HARNESS_TOKEN:?Set a per-instance test token of at least 16 characters}
+  ltimock:
+    image: ${MOODLE_DOCKER_LTI_HARNESS_IMAGE:-lti-test-harness:local}
+    environment:
+      PUBLIC_URL: ${MOODLE_DOCKER_LTI_HARNESS_PUBLIC_URL:-http://ltimock:8080}
+      HARNESS_TOKEN: ${MOODLE_DOCKER_LTI_HARNESS_TOKEN:?Set a per-instance test token of at least 16 characters}
+      ALLOW_NUMERIC_RESOURCE_LINK_ID: ${ALLOW_NUMERIC_RESOURCE_LINK_ID:-false}
+    volumes:
+      - lti-harness-data:/data
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+volumes:
+  lti-harness-data:

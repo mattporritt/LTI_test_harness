@@ -169,7 +169,7 @@ test('created line item URL and tool key survive a harness restart', async () =>
 test('missing scopes, invalid scores and untrusted services fail before credentials leave', async () => {
   const id = await launch(undefined, { [AGS + 'endpoint']: { scope: [], lineitem: issuer + '/item' } });
   assert.equal((await api(`/api/launches/${id}/actions`, { action: 'score', scoreGiven: 80 })).status, 403);
-  for (const scoreGiven of ['', -1, 101, 'NaN']) assert.equal((await api(`/api/launches/${id}/actions`, { action: 'score', scoreGiven })).status, 400);
+  for (const scoreGiven of ['', -1, 'NaN', true]) assert.equal((await api(`/api/launches/${id}/actions`, { action: 'score', scoreGiven })).status, 400);
   const other = await launch(undefined, { [NRPS + 'namesroleservice']: { context_memberships_url: 'https://evil.invalid/steal' } });
   const count = seen.length;
   assert.equal((await api(`/api/launches/${other}/actions`, { action: 'members' })).status, 400);
@@ -309,4 +309,28 @@ test('line-item creation supports explicit association and standalone items', as
     assert.equal(result.request.body.resourceLinkId, resourceLinkId === null ? undefined : resourceLinkId);
   }
   assert.equal((await api(`/api/launches/${id}/actions`, { action: 'create-lineitem', resourceLinkId: '' })).status, 400);
+});
+
+
+test('partial, null, omitted and stale score bodies reach the platform unchanged', async () => {
+  const id = await launch();
+  const timestamp = '2020-01-02T03:04:05.678Z';
+  for (const data of [
+    { scoreGiven: 60, scoreMaximum: 100, gradingProgress: 'Pending', activityProgress: 'InProgress' },
+    { scoreGiven: 60, gradingProgress: 'PendingManual' },
+    { scoreGiven: null, gradingProgress: 'NotReady', activityProgress: 'Initialized' },
+    { scoreMode: 'omit', gradingProgress: 'NotReady', activityProgress: 'Initialized' },
+    { scoreGiven: 120, scoreMaximum: 100 },
+  ]) {
+    const r = await api(`/api/launches/${id}/actions`, { action: 'score', timestamp, ...data });
+    assert.equal(r.status, 200); const result = await r.json(); assert.equal(result.success, true);
+    const sent = JSON.parse(seen.findLast(r => r.url.includes('/scores?')).raw);
+    assert.equal(sent.timestamp, timestamp);
+    assert.equal(sent.gradingProgress, data.gradingProgress || 'FullyGraded');
+    if (data.scoreMode === 'omit') assert.equal(Object.hasOwn(sent, 'scoreGiven'), false);
+    else assert.equal(sent.scoreGiven, data.scoreGiven);
+  }
+  for (const data of [{ gradingProgress: 'pending' }, { activityProgress: 'wrong' }, { timestamp: 'yesterday' }, { scoreMaximum: 0 }]) {
+    assert.equal((await api(`/api/launches/${id}/actions`, { action: 'score', scoreGiven: 60, ...data })).status, 400);
+  }
 });

@@ -147,3 +147,30 @@ The smoke script verifies roster membership, posts a score and asserts the retur
 result. Run it only on synthetic test learners: it intentionally changes grades.
 The optional `CREATE_STANDALONE=true` creates and scores a separate grade column;
 `LEGACY_LAUNCH_ID` additionally tests a chosen LTI 1.1 launch's Basic Outcomes return.
+
+
+## moodle-docker test services
+
+Use the [optional moodle-docker service fragment](integrations/moodle-docker/README.md)
+with `bin/moodle-docker-compose -f ...`. It adds `ltimock:8080` to the selected
+project network, uses a project-specific persistent volume, and exposes opt-in URL/
+token environment entries to a newly created test webserver. Moodle and Selenium
+reach it by Docker DNS. No shared stack teardown or wrapper source patch is needed.
+For HTTPS/manual use, follow the trusted-proxy setup linked above.
+
+## Provisional grades and completion: MDL-89973
+
+The manual form and API can send `Pending`/`InProgress` scores, explicit null or
+omitted scores, custom maxima, and older timestamps. This lets tests expose
+[MDL-89973](https://moodle.atlassian.net/browse/MDL-89973), which the previous
+FullyGraded-only score action could not reproduce.
+
+The [reproduction guide](docs/MDL-89973.md) includes a real-Moodle regression runner
+that checks grades and passing-grade completion after every update. On the local
+development branch it confirmed that a provisional update erased a final grade and
+that older updates were accepted after clearing, despite HTTP 200 responses.
+The runner restores the synthetic learner's final grade after testing. It exits 1
+when those regressions are present; this does not modify or claim to fix Moodle.
+
+[Latest integration validation and commands](docs/integration-validation.md) records
+the wrapper probes, 50 passing tests, and real regression results.

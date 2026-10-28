@@ -2,6 +2,7 @@ import http from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { Store } from './store.js';
+import { scorePayload, ACTIVITY_PROGRESS, GRADING_PROGRESS } from './score.js';
 import { LTI, DL, AGS, NRPS, SCOPE, insist, equal, webURL, jwtSign, jwtParts, jwtVerify, oauthSignature, oauthHeader, publicJwk, formPost, escapeHTML as e } from './protocol.js';
 
 const json = (res, status, data) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(data)); };
@@ -11,7 +12,8 @@ function page(res, title, content, status = 200) {
   :root{font-family:system-ui,sans-serif;color:#202b39;background:#f3f6f9}body{max-width:1000px;margin:36px auto;padding:0 24px}a{color:#125ca5}header{border-bottom:3px solid #237c83;margin-bottom:24px}h1{font-size:1.8rem}section,details{background:white;border:1px solid #cad4df;border-radius:8px;padding:20px;margin:16px 0}label{display:block;margin:12px 0}input,select,textarea,button{font:inherit;padding:9px;border:1px solid #8497ab;border-radius:4px}input:not([type=checkbox]),textarea{display:block;width:min(95%,700px)}textarea{min-height:100px}button{background:#125ca5;color:white;cursor:pointer}button:hover{background:#084376}:focus-visible{outline:3px solid #b24c00;outline-offset:3px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#eef2f6;padding:16px}code{overflow-wrap:anywhere}.muted{color:#4a596c}.error{border-left:5px solid #b62727}table{border-collapse:collapse;width:100%}td,th{padding:10px;text-align:left;border-bottom:1px solid #d3dce5}
   </style></head><body><header><p>LTI development tools</p><h1>${e(title)}</h1></header>${content}</body></html>`);
 }
-const field = (name, label, value = '', type = 'text') => `<label>${e(label)}<input name="${e(name)}" type="${e(type)}" value="${e(value)}" required></label>`;
+const field = (name, label, value = '', type = 'text') => `<label>${e(label)}<input name="${e(name)}" type="${e(type)}" value="${e(value)}"${type === 'number' ? ' step="any"' : ''} required></label>`;
+const select = (name, label, values, selected) => `<label>${e(label)}<select name="${e(name)}">${values.map(value => `<option value="${e(value)}"${value === selected ? ' selected' : ''}>${e(value)}</option>`).join('')}</select></label>`;
 const pretty = value => `<pre>${e(JSON.stringify(value, null, 2))}</pre>`;
 async function body(req) {
   let text = ''; let length = 0;
@@ -99,7 +101,7 @@ export function createHarness(options = {}) {
       const content = l.claims[LTI + 'custom']?.harness_content || l.claims.custom_harness_content || 'quiz';
       if (content === 'echo') controls += '<section><h2>Claims explorer</h2><p>This resource displays verified platform claims below.</p></section>';
       else controls += `<section><h2>Interactive test content</h2><p>What is 2 + 2?</p>${actionForm('answer', '<label>Your answer<input type="number" name="answer" required></label>', 'Check answer')}<p>Checking the answer records a local result. Send a score separately below.</p></section>`;
-      if (l.version === '1.3') controls += `<section><h2>Platform services</h2>${actionForm('lineitems', '', 'Read line items')}${actionForm('create-lineitem', field('label', 'New line item label', 'Harness grade'), 'Create line item')}${actionForm('members', '', 'Read roster')}${actionForm('results', '', 'Read results')}${actionForm('score', field('scoreGiven','Score (0–100)', '80','number'), 'Send score for launched user')}<p>Services require the relevant platform permissions. The exact advertised URL is used; redirects fail the request.</p></section>`;
+      if (l.version === '1.3') controls += `<section><h2>Platform services</h2>${actionForm('lineitems', '', 'Read line items')}${actionForm('create-lineitem', field('label', 'New line item label', 'Harness grade'), 'Create line item')}${actionForm('members', '', 'Read roster')}${actionForm('results', '', 'Read results')}${actionForm('score', field('scoreGiven', 'Score value (ignored for null/omit)', '80', 'number') + field('scoreMaximum', 'Score maximum', '100', 'number') + select('scoreMode', 'Score mode (null/omit clear the grade)', ['value', 'null', 'omit'], 'value') + select('activityProgress', 'Activity progress', ACTIVITY_PROGRESS, 'Completed') + select('gradingProgress', 'Grading progress', GRADING_PROGRESS, 'FullyGraded') + `<label>Line item URL (optional override)<input name="lineitemUrl" value="${e(l.lineitemUrl || l.claims[AGS + 'endpoint']?.lineitem || '')}"></label>` + '<label>Timestamp (optional ISO 8601, for stale-update tests)<input name="timestamp" placeholder="2026-10-28T00:00:00.000Z"></label>', 'Send score for launched user')}<p>Services require the relevant platform permissions. The exact advertised URL is used; redirects fail the request.</p></section>`;
       if (l.version === '1.1') controls += `<section><h2>Basic Outcomes</h2>${actionForm('outcome', field('scoreGiven','Score (0–100)', '80', 'number'), 'Send outcome grade')}</section>`;
     }
     page(res, 'Launch inspector', `<p>Protocol ${e(l.version)} · ${e(l.messageType)}</p>${l.warnings?.length ? `<section role="alert"><h2>Protocol warnings</h2>${pretty(l.warnings)}</section>` : ''}${result ? `<section role="status"><h2>Action result</h2>${result}</section>` : ''}${controls}<details open><summary>Verified launch claims</summary>${pretty(l.claims)}</details><details><summary>Action history</summary>${pretty(l.actions)}</details><p class="muted">Session links grant access to this test launch. They expire when records are deleted or evicted by retention limits.</p>`);
@@ -169,11 +171,8 @@ export function createHarness(options = {}) {
       const lineitem = input.lineitemUrl || l.lineitemUrl || ags.lineitem;
       insist(lineitem, 'No line item URL; create one or supply lineitemUrl');
       if (action === 'score') {
-        insist(typeof l.claims.sub === 'string' && l.claims.sub.length, 'Anonymous launches cannot submit a score');
-        const score = Number(input.scoreGiven);
-        insist(input.scoreGiven !== undefined && String(input.scoreGiven).trim() && Number.isFinite(score) && score >= 0 && score <= 100, 'Score must be between 0 and 100');
         scope = SCOPE.score; method = 'POST'; contentType = 'application/vnd.ims.lis.v1.score+json';
-        payload = { userId: l.claims.sub, scoreGiven: score, scoreMaximum: 100, timestamp: new Date().toISOString(), activityProgress: 'Completed', gradingProgress: 'FullyGraded' };
+        payload = scorePayload(input, l.claims.sub);
       } else { scope = SCOPE.result; contentType = 'application/vnd.ims.lis.v2.resultcontainer+json'; }
       const u = webURL(lineitem); u.pathname = u.pathname.replace(/\/$/, '') + (action === 'score' ? '/scores' : '/results'); url = u.href;
     } else insist(false, 'Unknown action');
