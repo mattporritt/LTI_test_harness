@@ -5,6 +5,9 @@ LTI platform. It provides a browser UI and an authenticated automation API for
 launches, content selection, quiz interaction, grading, rosters and submission review.
 The harness needs no separate database or npm dependencies. Moodle runs separately.
 
+It can also act as an LTI 1.3 **platform** (consumer) and launch a tool you are testing,
+including Moodle's own tool side. See [platform mode](docs/platform-mode.md).
+
 ## What you need
 
 - Docker with Docker Compose. Node.js 22+ is needed only for host-side scripts or development.
@@ -315,6 +318,26 @@ Moodle grades and passing-grade completion, and the runner restores the final gr
 It exits 1 when the Moodle regressions are present; that is a detected LMS failure.
 [Current-main validation](docs/moodle-main-validation.md) records those failures.
 
+## Optional: platform mode (launching a tool from the harness)
+
+The harness can act as the LTI 1.3 platform and launch a tool you are testing, such as
+Moodle's `enrol_lti`/`auth_lti` tool side. Steps in brief; the
+[platform mode guide](docs/platform-mode.md) has the full procedure and API.
+
+1. Run the harness on a hostname reachable by both the tool and your browser.
+2. Read the platform details from `GET /api/platform` and register them in the tool
+   (issuer, authentication URL, keyset URL, access token URL), with a client ID and
+   deployment ID.
+3. Register the tool in the harness: `POST /api/platform/tools` or the **Platform mode**
+   sections of `/admin`.
+4. Create a launch with `POST /api/platform/launches` (message type, user, roles,
+   context, custom parameters, optional claim overrides) and open the returned
+   `launchUrl` in a browser.
+5. Inspect the issued claims and, for Deep Linking, the verified content items with
+   `GET /api/platform/launches/{id}`.
+
+Platform services (AGS, NRPS) and Basic Outcomes are not implemented in this mode.
+
 ## Troubleshooting
 
 | Symptom | What to check |
@@ -341,6 +364,7 @@ It exits 1 when the Moodle regressions are present; that is a detected LMS failu
 | Deep Linking 2.0 | Single-resource signed response, preserved data and grade line item |
 | AGS 2.0 / NRPS 2.0 | Read/create line items, send scores/read results, read memberships; pagination via API |
 | Submission Review | Matching local learner answers, preserved for_user, read-only view |
+| Platform mode | Harness as LTI 1.3 platform: resource link and Deep Linking launches to a tool, configurable claims, verified Deep Linking responses |
 | Manual / automation | Browser forms and bearer-authenticated JSON API; persisted claims and service transcripts |
 
 Real upstream-main browser tests passed registration, Deep Linking, learner
@@ -349,7 +373,8 @@ interaction, grades, rosters and separate teacher review; see
 The separate [development-baseline results](docs/moodle-validation.md) retain its
 core_ltix failures. MDL-89973 remains reproducible on main. Fresh-install results do
 not prove stored-URL migration, backup/restore, course copy or mobile interoperability.
-The tool is not 1EdTech certified. LTI 2.0, registration updates, legacy Content-Item
+Platform mode was exercised against Moodle's tool side; see its
+[validation record](docs/platform-mode.md#validation-record). The tool is not 1EdTech certified. LTI 2.0, registration updates, legacy Content-Item
 selection, Tool Settings, full AGS CRUD and Asset Processor are not implemented.
 
 ## Configuration, persistence and development
@@ -389,4 +414,4 @@ builds/smoke-tests the image. Scheduled Moodle PHPUnit/Behat integration and a
 published registry image remain separate project work; build the image locally.
 
 More detail: [Moodle setup](docs/moodle.md) · [moodle-docker integration](integrations/moodle-docker/README.md) ·
-[Testing](docs/testing.md) · [API](docs/api.md) · [Requirements and boundaries](docs/requirements.md).
+[Platform mode](docs/platform-mode.md) · [Testing](docs/testing.md) · [API](docs/api.md) · [Requirements and boundaries](docs/requirements.md).

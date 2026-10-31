@@ -11,8 +11,8 @@ These ask for a standalone container tool: 1.1/1.3 launches with inspectable cla
 interactive content, deep linking, AGS, NRPS and submission review; Asset Processor
 later. The advanced tool is a gate for the launch switch-over. T-HAR/T-PATH specifically
 need stored `services.php` line item URLs to remain usable after Moodle upgrades.
-This repository supplies the external tool; it does not modify Moodle or integrate
-its PHPUnit/Behat configuration automatically.
+This repository supplies the external tool, and an optional platform mode for launching
+tools; it does not modify Moodle or integrate its PHPUnit/Behat configuration automatically.
 
 ## Expected behaviour
 
@@ -28,6 +28,9 @@ its PHPUnit/Behat configuration automatically.
 - Persist keys, registrations and captures across restarts so tests can exercise a
   URL captured before an LMS upgrade. Retain bounded histories.
 - Offer local quiz content and read-only submission review of the selected learner.
+- Optionally act as an LTI 1.3 platform: register tools, issue signed resource link and
+  Deep Linking launches with configurable claims, and verify the tool's Deep Linking
+  response. Platform services (AGS, NRPS) are not provided in this mode.
 - Package one non-root Docker image and reproducible tests usable without an LMS.
 
 ## Selection criteria and exclusions

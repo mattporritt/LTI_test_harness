@@ -82,3 +82,16 @@ Follow the [dynamic registration browser sequence](dynamic-registration.md#moodl
 including Pending → Activate and a learner launch/grade. `npm test` also exercises
 an independent discovery/registration server followed by a signed LTI launch, plus
 rejection, token handling, replay and pending-deployment cases.
+
+## Platform mode
+
+`npm test` includes `test/platform.test.js`, which runs the harness as a platform
+against a small stand-in tool: the full OIDC sequence, claim content, single-use and
+expiry handling, authentication request validation, claim overrides, invalid
+signatures, GET and POST login initiation, and verified Deep Linking responses.
+
+For a real tool, follow the [platform mode guide](platform-mode.md): register the two
+sides, create a launch with `POST /api/platform/launches`, open its `launchUrl`, and
+read the issued claims or Deep Linking result from `GET /api/platform/launches/{id}`.
+The guide's [validation record](platform-mode.md#validation-record) lists what has been
+exercised against Moodle.

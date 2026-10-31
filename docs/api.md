@@ -17,6 +17,22 @@ JWKS endpoint are unauthenticated.
 | POST | `/api/launches/{id}/actions` | Execute an action |
 | DELETE | `/api/launches` | Clear launches, preserving keys and registrations |
 
+## Platform mode
+
+Platform (consumer) mode has its own tool registry and launch endpoints under
+`/api/platform`. See [platform mode](platform-mode.md) for the full guide.
+
+| Method | Path | Result |
+| --- | --- | --- |
+| GET | `/api/platform` | Issuer, authentication, keyset and token URLs to give a tool |
+| GET | `/api/platform/tools` | Registered tools |
+| POST | `/api/platform/tools` | Register a tool (201); duplicate client ID is 409 |
+| DELETE | `/api/platform/tools/{id}` | Remove a tool and its launches |
+| GET | `/api/platform/launches` | Platform launches with status and issued claims |
+| POST | `/api/platform/launches` | Create a launch (201); returns its `launchUrl` |
+| GET | `/api/platform/launches/{id}` | One platform launch |
+| DELETE | `/api/platform/launches` | Clear platform launches |
+
 ## Dynamic registration
 
 `POST /api/registration-links` accepts `{ "name": "Tool name", "origins": ["https://lms.example.test"] }`

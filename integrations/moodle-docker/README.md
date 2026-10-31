@@ -100,3 +100,10 @@ confirmed `/health` from Moodle's `curl` class and the existing Selenium contain
 The real issue sequence used the separate trusted HTTPS tool, with grade/completion
 observations from the actual Moodle database. No shared Moodle container was
 recreated to perform the service-fragment validation.
+
+## Platform mode
+
+The same image can also act as an LTI 1.3 platform that launches a tool under test; see
+[platform mode](../../docs/platform-mode.md). Its public origin must resolve to the harness
+from both the tool's container and the host browser, so the internal `ltimock` hostname is
+not suitable for browser launches.

@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { Store } from './store.js';
 import { dynamicRegistration } from './registration.js';
+import { platformMode } from './platform.js';
 import { scorePayload, ACTIVITY_PROGRESS, GRADING_PROGRESS } from './score.js';
 import { LTI, DL, AGS, NRPS, SCOPE, insist, equal, webURL, jwtSign, jwtParts, jwtVerify, oauthSignature, oauthHeader, publicJwk, formPost, escapeHTML as e } from './protocol.js';
 
@@ -79,6 +80,7 @@ export function createHarness(options = {}) {
     insist(!d.platforms.some(p => p.issuer === input.issuer && p.clientId === input.clientId), 'Issuer/client already registered', 409);
     return { id: randomUUID(), name: input.name, issuer: input.issuer, clientId: input.clientId, authUrl: input.authUrl, tokenUrl: input.tokenUrl, jwksUrl: input.jwksUrl, deploymentIds, origins };
   }
+  const platformSide = platformMode({ base, data: d, save: () => store.save(), requestJSON, authorize, checkOrigin, body, page, json, pretty });
   const dynamic = dynamicRegistration({ base, request, platformData, platforms: d.platforms, save: () => store.save() });
   function registration() {
     return { name: 'LTI test harness', dynamic_registration_links: `${base}/api/registration-links`, initiate_login_uri: `${base}/lti/login`, redirect_uris: [launchURL], jwks_uri: `${base}/.well-known/jwks.json`, target_link_uri: launchURL, deep_linking_uri: launchURL, messages: ['LtiResourceLinkRequest', 'LtiDeepLinkingRequest', 'LtiSubmissionReviewRequest'], api: `${base}/api`, supported: ['LTI 1.1 basic launch and Basic Outcomes', 'LTI 1.3', 'Deep Linking 2.0', 'AGS 2.0', 'NRPS 2.0', 'Submission Review 1.0'] };
@@ -89,6 +91,7 @@ export function createHarness(options = {}) {
     <section><h2>Register an LTI 1.3 platform</h2><form method="post" action="/admin/platforms">${field('name','Display name')}${field('issuer','Issuer (exact platform value)', '', 'url')}${field('clientId','Client ID')}${field('deploymentIds','Deployment IDs (comma separated)')}${field('authUrl','Authentication URL', '', 'url')}${field('tokenUrl','Access token URL', '', 'url')}${field('jwksUrl','Public keyset URL', '', 'url')}<label>Additional trusted service origins (comma separated)<input name="serviceOrigins" placeholder="https://services.example.org"></label><button>Register platform</button></form></section>
     <section><h2>Register an LTI 1.1 consumer</h2><form method="post" action="/admin/consumers">${field('name','Consumer display name')}${field('key','Consumer key')}${field('secret','Shared secret', '', 'password')}<label>Trusted outcome service origins (comma separated)<input name="serviceOrigins" placeholder="https://lms.example.org"></label><button>Register consumer</button></form></section>
     <section><h2>Registrations</h2>${pretty(d.platforms)}${d.platforms.filter(p => !p.deploymentIds.length).map(p => `<form method="post" action="/admin/platforms/${e(p.id)}/deployments"><p>Deployment required for ${e(p.name)} (${e(p.clientId)})</p>${field('deploymentIds','Deployment IDs (comma separated)')}<button>Save deployment IDs</button></form>`).join('')}${pretty(d.consumers.map(({ secret, ...p }) => p))}</section>
+    ${platformSide.adminSection()}
     <section><h2>Recorded launches</h2><ul>${[...d.launches].reverse().map(l => `<li><a href="/session/${e(l.id)}">${e(l.createdAt)} · ${e(l.version)} · ${e(l.messageType)}</a></li>`).join('') || '<li>No launches yet</li>'}</ul></section>`);
   }
   function sessionPage(res, l, result = '') {
@@ -221,7 +224,8 @@ export function createHarness(options = {}) {
       if (req.method === 'GET' && path === '/health') return json(res, 200, { status: 'ok', version: '0.1.0' });
       if (req.method === 'GET' && path === '/.well-known/jwks.json') return json(res, 200, { keys: [publicJwk(d.privateKey, d.kid)] });
       if (req.method === 'GET' && path === '/registration') return json(res, 200, registration());
-      if (req.method === 'GET' && path === '/') return page(res, 'LTI test harness', '<p>A standalone tool for verifying LTI launches, content selection, rosters and grade passback.</p><section><h2>Get started</h2><p><a href="/admin">Configure platforms and inspect launches</a> (user: admin, password: HARNESS_TOKEN)</p><p><a href="/registration">Tool registration endpoints (JSON)</a></p></section><p>Supports LTI 1.1 and 1.3. Intended for isolated development and testing with synthetic users.</p>');
+      if (req.method === 'GET' && path === '/') return page(res, 'LTI test harness', '<p>A standalone tool for verifying LTI launches, content selection, rosters and grade passback.</p><section><h2>Get started</h2><p><a href="/admin">Configure platforms and inspect launches</a> (user: admin, password: HARNESS_TOKEN)</p><p><a href="/registration">Tool registration endpoints (JSON)</a></p></section><p>Supports LTI 1.1 and 1.3, and can act as an LTI 1.3 platform to launch a tool under test (platform mode). Intended for isolated development and testing with synthetic users.</p>');
+      if (await platformSide.handle(req, res, url, path)) return;
       if (path.startsWith('/api') || path.startsWith('/admin')) {
         authorize(req, res); if (req.method !== 'GET') checkOrigin(req);
         if (req.method === 'GET' && path === '/admin') return adminPage(res);
